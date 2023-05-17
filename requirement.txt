@@ -1,2 +1,5 @@
 shapely==1.8.5.post1
-av2
+numpy==1.22.4
+nuscenes-devkit==1.1.9
+setuptools==58.0.4
+tensorboard==2.11.0
