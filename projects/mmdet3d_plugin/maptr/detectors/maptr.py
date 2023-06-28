@@ -178,7 +178,7 @@ class MapTR(MVXTwoStageDetector):
                 # img_feats = self.extract_feat(img=img, img_metas=img_metas)
                 img_feats = [each_scale[:, i] for each_scale in img_feats_list]
                 prev_bev = self.pts_bbox_head(
-                    img_feats, img_metas, prev_bev, only_bev=True)
+                    img_feats, None, img_metas, prev_bev, only_bev=True)
             self.train()
             return prev_bev
 
