@@ -11,7 +11,7 @@ from projects.mmdet3d_plugin.datasets.builder import build_dataloader
 from projects.mmdet3d_plugin.datasets import custom_build_dataset
 # from mmdet3d.datasets import build_dataloader, build_dataset
 from mmdet3d.models import build_detector
-#from tools.misc.fuse_conv_bn import fuse_module
+# from tools.fuse_conv_bn import fuse_module
 
 
 def parse_args():
@@ -28,6 +28,15 @@ def parse_args():
         'the inference speed')
     args = parser.parse_args()
     return args
+
+
+def get_max_memory(model):
+    device = getattr(model, 'output_device', None)
+    mem = torch.cuda.max_memory_allocated(device=device)
+    mem_mb = torch.tensor([mem / (1024 * 1024)],
+        dtype=torch.int,
+        device=device)
+    return mem_mb.item()
 
 
 def main():
@@ -59,8 +68,8 @@ def main():
         wrap_fp16_model(model)
     if args.checkpoint is not None:
         load_checkpoint(model, args.checkpoint, map_location='cpu')
-    #if args.fuse_conv_bn:
-    #    model = fuse_module(model)
+    # if args.fuse_conv_bn:
+    #     model = fuse_module(model)
 
     model = MMDataParallel(model, device_ids=[0])
 
@@ -71,21 +80,24 @@ def main():
     pure_inf_time = 0
 
     # benchmark with several samples and take the average
+    max_memory = 0
     for i, data in enumerate(data_loader):
-        torch.cuda.synchronize()
-        start_time = time.perf_counter()
+        # torch.cuda.synchronize()
         with torch.no_grad():
+            start_time = time.perf_counter()
             model(return_loss=False, rescale=True, **data)
 
-        torch.cuda.synchronize()
-        elapsed = time.perf_counter() - start_time
+            torch.cuda.synchronize()
+            elapsed = time.perf_counter() - start_time
+            max_memory = max(max_memory, get_max_memory(model))
 
         if i >= num_warmup:
             pure_inf_time += elapsed
             if (i + 1) % args.log_interval == 0:
                 fps = (i + 1 - num_warmup) / pure_inf_time
                 print(f'Done image [{i + 1:<3}/ {args.samples}], '
-                      f'fps: {fps:.1f} img / s')
+                      f'fps: {fps:.1f} img / s, '
+                      f"gpu mem: {max_memory} M")
 
         if (i + 1) == args.samples:
             pure_inf_time += elapsed
